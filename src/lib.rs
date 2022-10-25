@@ -1,3 +1,8 @@
+static POSIX_PATH_SEP: &str = "/";
+static WINDOWS_PATH_SEP: &str = "\\";
+static WINDOWS_DRIVE_SEP: &str = ":";
+
+#[derive(Debug)]
 pub struct Path {
     drive: Option<String>,
     nodes: Vec<String>,
@@ -7,7 +12,7 @@ impl Path {
     pub fn new(path: impl Into<String>) -> Self {
         let path = path.into();
 
-        match path.split_once(':') {
+        match path.split_once(WINDOWS_DRIVE_SEP) {
             Some((drive, path)) => {
                 Self::from_drive_and_path(Some(String::from(drive)), String::from(path))
             }
@@ -19,25 +24,36 @@ impl Path {
         Self {
             drive,
             nodes: path
-                .split('/')
+                .replace(WINDOWS_PATH_SEP, POSIX_PATH_SEP)
+                .split(POSIX_PATH_SEP)
                 .map(String::from)
                 .collect::<Vec<String>>(),
         }
     }
 
-    pub fn parts(&self) -> Vec<&str> {
+    pub fn parts(&self) -> Vec<String> {
         let mut parts = Vec::new();
 
-        self.drive.as_ref().and_then(|drive| {
-            parts.push(drive.as_str());
-            None::<String>
-        });
+        match self.drive() {
+            Some(drive) => {
+                if self.nodes.get(0).unwrap_or(&"".to_string()).is_empty() {
+                    parts.push(format!("{}{}{}", drive, WINDOWS_DRIVE_SEP, WINDOWS_PATH_SEP));
+                } else {
+                    parts.push(format!("{}{}", drive, WINDOWS_DRIVE_SEP));
+                }
+            }
+            None => ()
+        };
 
         for node in &self.nodes {
             if node.is_empty() {
-                parts.push("/")
+                if self.drive.is_some() {
+                    continue;
+                }
+
+                parts.push(POSIX_PATH_SEP.to_string());
             } else {
-                parts.push(node.as_str())
+                parts.push(node.clone());
             }
         }
 
